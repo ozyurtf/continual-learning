@@ -1,6 +1,6 @@
-# Continual Learning 
-
 **Note**: Currently, the models are cheating. They memorize the past frame(s) and optical flow(s) and showing those as the prediction of the next video frame(s) and optical flow(s). I am currently working on to fix that issue.
+
+# Continual Learning 
 
 ## Next Frame(s) Prediction 
 
@@ -15,6 +15,14 @@
 The full dataset can be downloaded from here: [http://clevrer.csail.mit.edu](http://clevrer.csail.mit.edu).  
 
 ## Training
+
+The training process is summarized in the figures below. 
+
+![Flow Reconstruction Model](images/flow-reconstruction-model.png)
+
+![Image Reconstruction Model](images/image-reconstruction-model.png)
+
+![Pipeline](images/pipeline.png)
 
 After installing the libraries listed in `requirements.txt`, the training process can be started using the following code:  
 
