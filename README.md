@@ -4,7 +4,7 @@
 
 ## Next Frame(s) Prediction 
 
-![Next Frame(s) Prediction Gif](https://i.imgur.com/bUhf6WR.gif)
+![Next Frame(s) Prediction Gif](gifs/video_00000_frame_pred.gif)
 
 ## Optical Flow(s) Prediction
 
@@ -19,7 +19,14 @@ The full dataset can be downloaded from here: [http://clevrer.csail.mit.edu](htt
 After installing the libraries listed in `requirements.txt`, the training process can be started using the following code:  
 
 ```python 
-python train.py --num_predictions 3 --embed_dim 512 --hidden_size 512 --stride 1 --num_frames 127 --resize_img 224 --patch_size 32
+python train.py\
+    --num_predictions 3\
+    --embed_dim 512\
+    --hidden_size 512\
+    --stride 1\
+    --num_frames 127\
+    --resize_img 224\
+    --patch_size 32
 ```  
 
 - `num_predictions` specifies the number of predictions made in each step. For example, if set to 4, the next 4 frames, optical flows, and states are predicted in the current step. The visualizations of the frame predictions and optical flow predictions are saved into the `flows` and `frames` folders for each video separately.  
