@@ -4,7 +4,7 @@
 
 ## Next Frame(s) Prediction 
 
-![Next Frame(s) Prediction Gif](https://imgur.com/a/dAEFZEt)
+![Next Frame(s) Prediction Gif](https://imgur.com/a/frame-prediction-dAEFZEt)
 
 ## Optical Flow(s) Prediction
 
