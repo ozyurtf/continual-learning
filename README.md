@@ -18,9 +18,16 @@ The full dataset can be downloaded from here: [http://clevrer.csail.mit.edu](htt
 
 The training process is summarized in the figures below. 
 
-![Flow Reconstruction Model](images/flow-reconstruction-model.png)
+<p align="center">
+  <img src="images/flow-reconstruction-model.png" width="45%" alt="Flow Reconstruction Model"/>
+  <img src="images/image-reconstruction-model.png" width="45%" alt="Image Reconstruction Model"/>
+</p>
 
-![Image Reconstruction Model](images/image-reconstruction-model.png)
+<p align="center">
+  <b>Flow Reconstruction</b> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+  <b>Image Reconstruction</b>
+</p>
+
 
 ![Pipeline](images/pipeline.png)
 
