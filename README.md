@@ -29,7 +29,14 @@ The training process is summarized in the figures below.
 </p>
 
 
-![Pipeline](images/pipeline.png)
+<p align="center">
+  <img src="images/pipeline.png" width="90%" alt="Pipeline"/>
+</p>
+
+<p align="center">
+  <b>Pipeline</b>
+</p>
+
 
 After installing the libraries listed in `requirements.txt`, the training process can be started using the following code:  
 
