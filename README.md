@@ -1,7 +1,5 @@
 **Note**: Currently, the models are cheating. They memorize the past frame(s) and optical flow(s) and showing those as the prediction of the next video frame(s) and optical flow(s). I am currently working on to fix that issue.
 
-# Continual Learning 
-
 ## Next Frame(s) Prediction 
 
 ![Next Frame(s) Prediction Gif](gifs/video_00000_frame_pred.gif)
