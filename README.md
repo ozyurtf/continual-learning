@@ -1,4 +1,4 @@
-**Note**: Currently, the models are cheating. They memorize the past frame(s) and optical flow(s) and showing those as the prediction of the next video frame(s) and optical flow(s). I am currently working on to fix that issue.
+**Note**: Currently, the models are cheating. They memorize the past frame(s) and optical flow(s) and show those as the prediction of the next video frame(s) and optical flow(s). I am currently working on to fix that issue.
 
 ## Next Frame(s) Prediction 
 
