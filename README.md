@@ -1,6 +1,6 @@
 **Note**: The objective of this project is to develop a model that jointly predicts future video frames and motion (optical flow) in a sequential manner from the same hidden state, and answers user questions regarding the events observed during the video.
 
-Currently, the models are cheating. They memorize the past frame(s) and optical flow(s) and show those as the prediction of the next video frame(s) and optical flow(s). I am currently working to fix that issue.
+Currently, the models are cheating. They memorize the past frame(s) and optical flow(s) and show those as the prediction of the next video frame(s) and optical flow(s). I am working on to fix that issue.
 
 ## Next Frame(s) Prediction 
 
