@@ -19,8 +19,8 @@ The full dataset can be downloaded from here: [http://clevrer.csail.mit.edu](htt
 The training process is summarized in the figures below. 
 
 <p align="center">
-  <img src="images/flow-reconstruction-model.png" width="400px" alt="Flow Reconstruction Model"/>
-  <img src="images/image-reconstruction-model.png" width="400px" alt="Image Reconstruction Model"/>
+  <img src="figures/flow-reconstruction-model.png" width="400px" alt="Flow Reconstruction Model"/>
+  <img src="figures/image-reconstruction-model.png" width="400px" alt="Image Reconstruction Model"/>
 </p>
 
 <p align="center">
@@ -30,7 +30,7 @@ The training process is summarized in the figures below.
 
 
 <p align="center">
-  <img src="images/pipeline.png" width="90%" alt="Pipeline"/>
+  <img src="figures/pipeline.png" width="90%" alt="Pipeline"/>
 </p>
 
 <p align="center">
@@ -56,8 +56,8 @@ python train.py\
 - `hidden_size` specifies the size of the hidden state for the LSTM cell.  
 - `stride` specifies the intervals between predictions. For instance, if the stride is set to 4 and the number of predictions to 3, the 5th, 9th, and 13th frames and the optical flows between the 1st-5th frames, 5th-9th frames, and 9th-13th frames are predicted in the first step. In the next step, the 9th, 13th, and 17th frames and optical flows between the 5th-9th frames, 9th-13th frames, and 13th-17th frames are predicted, and so on.  
 - `num_frames` specifies the number of frames used to train the model. Each video contains 128 frames.  
-- `resize_img` specifies the target dimensions of the images before extracting features with CLIP's image encoder.  
-- `patch_size` specifies the size of the patches used to process images in CLIP's image encoder.  
+- `resize_img` specifies the target dimensions of the figures before extracting features with CLIP's image encoder.  
+- `patch_size` specifies the size of the patches used to process figures in CLIP's image encoder.  
 
 These are all optional parameters, and the code can also run with the simpler command:  
 
