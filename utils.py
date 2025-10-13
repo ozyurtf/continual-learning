@@ -24,16 +24,28 @@ def return_objects(img, object_detection, device):
     return filtered_boxes
 
 def return_state(img, object_detection, device): 
-    boxes = return_objects(img, object_detection, device)
-    num_objects = len(boxes)
-    state = torch.zeros(size = (32,4))
-    state[:num_objects] = boxes      
-    state = torch.stack((state[:,0], 
-                         state[:,2]-state[:,0], 
-                         state[:,1], 
-                         state[:,3] - state[:,1])).T
+    num_objects_batch = []
+    state_batch = []
     
-    return num_objects, state
+    for i in range(img.shape[0]):
+        print(img[i].shape)
+        boxes = return_objects(img[i], object_detection, device)
+        num_objects = len(boxes)
+        state = torch.zeros(size = (32,4), device=device)
+        state[:num_objects] = boxes      
+        state_stacked = torch.stack((
+            state[:,0], 
+            state[:,2] - state[:,0], 
+            state[:,1], 
+            state[:,3] - state[:,1])).T
+
+        num_objects_batch.append(num_objects)
+        state_batch.append(state_stacked)
+        
+    num_objects_batch = torch.tensor(num_objects_batch, device=device)
+    state_batch = torch.stack(state_batch, dim=0)
+    
+    return num_objects_batch, state_batch
 
 def extract_questions_answers(subfolder, file): 
     video_num = file.replace(".mp4", "").replace("video_", "")
@@ -87,8 +99,8 @@ def visualize_comparisons(predicted, actual, subfolder, file, type, i):
         actual_batch = actual[batch]
         
         for n in range(num_predictions):
-            predicted_next_np = predicted_batch[n].permute(1, 2, 0).detach().numpy()
-            actual_next_np = actual_batch[n].permute(1, 2, 0).detach().numpy()
+            predicted_next_np = predicted_batch[n].permute(1, 2, 0).detach().cpu().numpy()
+            actual_next_np = actual_batch[n].permute(1, 2, 0).detach().cpu().numpy()
             
             ax_pred = fig2.add_subplot(gs[row_idx, 0])
             ax_actual = fig2.add_subplot(gs[row_idx, 1])

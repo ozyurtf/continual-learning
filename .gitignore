@@ -10,3 +10,10 @@ frames
 video_test
 video_train
 video_validation
+exploratory_data_analysis.ipynb
+annotation_train
+annotation_validation
+derender_proposals
+train.json
+validation.json
+test.jsonexploratory-data-analysis.ipynb
