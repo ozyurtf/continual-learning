@@ -10,7 +10,7 @@ frames
 video_test
 video_train
 video_validation
-exploratory_data_analysis.ipynb
+exploratory-data-analysis.ipynb
 annotation_train
 annotation_validation
 derender_proposals

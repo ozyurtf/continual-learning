@@ -39,7 +39,9 @@ resize_img = args.resize_img
 patch_size = args.patch_size
 
 class VideoDataset(Dataset): 
-    def __init__(self, resize_img, patch_size, video_path, annotation_path,stride): 
+    def __init__(self, resize_img, video_path, annotation_path, mask_paths, stride, num_frames): 
+        self.num_frames = num_frames
+
         video_subfolders = os.listdir(video_path)
         annotation_subfolders = os.listdir(annotation_path)
 
@@ -61,14 +63,19 @@ class VideoDataset(Dataset):
         
         video_paths = []
         for subfolder in video_subfolders:
-            video_paths.extend([video_path + '/' + subfolder + '/' + f for f in os.listdir(f'{video_path}/{subfolder}') if f.endswith('.mp4')])
-        
+            video_list = os.listdir(f'{video_path}/{subfolder}')
+            video_list.sort(key=lambda x: int(x.split('_')[1].split('.')[0]))
+            video_paths.extend([video_path + '/' + subfolder + '/' + f for f in video_list if f.endswith('.mp4')])
+
         annotation_paths = []
         for subfolder in annotation_subfolders:
-            annotation_paths.extend([annotation_path + '/' + subfolder + '/' + f for f in os.listdir(f'{annotation_path}/{subfolder}') if f.endswith('.json')])
-        
+            annotation_list = os.listdir(f'{annotation_path}/{subfolder}')
+            annotation_list.sort(key=lambda x: int(x.split('_')[1].split('.')[0]))
+            annotation_paths.extend([annotation_path + '/' + subfolder + '/' + f for f in annotation_list if f.endswith('.json')])
+              
         self.video_paths = video_paths
         self.annotation_paths = annotation_paths
+        self.mask_paths = mask_paths
 
         self.preprocess = T.Compose(
             [
@@ -107,30 +114,52 @@ class VideoDataset(Dataset):
     
     def __getitem__(self, index): 
         video_path = self.video_paths[index]
+        proposal_index = video_path.split('.')[0].split('_')[-1]
         annotation_path = self.annotation_paths[index]
+        mask_path = f"{self.mask_paths}/proposal_{proposal_index}.json"
 
         frames, _, _ = read_video(str(video_path), pts_unit='sec')
         frames = frames.permute(0, 3, 1, 2)
-        frames = frames[::self.stride]
+        
+        # Attention: If you apply stride, you must apply it to motion trajectories, collisions, etc. as well
+        # frames = frames[::self.stride]
         frames_norm = self.preprocess(frames)
         frames_resized = self.resize(frames_norm)
-        frames_processed = self.preprocess(frames_resized)        
+        frames_processed = self.preprocess(frames_resized)
 
         with open(annotation_path, 'r') as f:
             annotations = json.load(f)
 
+        with open(mask_path, "r") as f:
+            masks = json.load(f)['frames']
+                         
         object_properties = annotations['object_property']
         motion_trajectories = annotations['motion_trajectory']
         collisions = annotations['collision']
-        return frames, frames_processed,object_properties, motion_trajectories, collisions
 
+        collision_dict = {}
+
+        for frame_id in range(self.num_frames):
+            collision_dict[frame_id] = {
+                'object_ids': None,
+                'location': None,
+                'frame_id': frame_id
+            }
+
+        for collision_event in collision_list:
+            frame_id = collision_event['frame_id']
+            collision_dict[frame_id] = collision_event        
+
+        return frames, frames_processed, masks, object_properties, motion_trajectories, collision_dict
+        
 def custom_collate(batch):
     frames = torch.stack([item[0] for item in batch])
     frames_processed = torch.stack([item[1] for item in batch])
-    object_properties = [item[2] for item in batch]  
-    motion_trajectories = [item[3] for item in batch]
-    collisions = [item[4] for item in batch] 
-    return frames, frames_processed, object_properties, motion_trajectories, collisions 
+    masks = [item[2] for item in batch]  
+    object_properties = [item[3] for item in batch]  
+    motion_trajectories = [item[4] for item in batch]
+    collisions = [item[5] for item in batch] 
+    return frames, frames_processed, masks, object_properties, motion_trajectories, collisions 
 
 raft_model = raft(weights=Raft_Large_Weights.DEFAULT, progress = True).to(device).eval()
 
@@ -196,14 +225,41 @@ if not os.path.exists(models_folder):
                 
 num_frames = min(num_frames, 127 - num_predictions)
 
-train_data = VideoDataset(resize_img = 224, patch_size = 32, video_path = "video_train", annotation_path = "annotation_train", stride = 1)
-train_loader = DataLoader(train_data, batch_size=2, shuffle=True, num_workers=0, collate_fn=custom_collate)
+train_data = VideoDataset(
+    resize_img = 224, 
+    patch_size = 32, 
+    stride = 1,
+    video_path = "video_train", 
+    annotation_path = "annotation_train", 
+    mask_paths = "derender_proposals"
+)
 
-validation_data = VideoDataset(resize_img = 224, patch_size = 32, video_path = "video_validation", annotation_path = "annotation_validation", stride = 1)
-validation_loader = DataLoader(validation_data, batch_size=2, shuffle=True, num_workers=0, collate_fn=custom_collate)       
+validation_data = VideoDataset(
+    resize_img = 224, 
+    patch_size = 32, 
+    stride = 1,
+    video_path = "video_validation", 
+    annotation_path = "annotation_validation", 
+    mask_paths = "derender_proposals"
+)
 
-for frames, frames_processed, object_properties, motion_trajectories, collisions in train_loader:     
-    # frames = torch.Size([batch_size, 128, 3, 320, 480])
+train_loader = DataLoader(
+    train_data, 
+    batch_size=4, 
+    shuffle=False, 
+    num_workers=0, 
+    collate_fn=custom_collate
+)
+
+validation_loader = DataLoader(
+    validation_data, 
+    batch_size=4, 
+    shuffle=False, 
+    num_workers=0, 
+    collate_fn=custom_collate
+)            
+
+for frames, frames_processed, masks, object_properties, motion_trajectories, collisions in train_loader:     
     accumulated_img_loss = 0.0
     accumulated_flow_h_loss = 0.0
     accumulated_flow_v_loss = 0.0
