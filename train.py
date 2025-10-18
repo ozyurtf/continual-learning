@@ -1,13 +1,12 @@
 import argparse
 import torch
-import torchvision
+from torchvision.models.detection import fasterrcnn_resnet50_fpn
 from torchvision.models.optical_flow import raft_large as raft
 from torchvision.models.optical_flow import Raft_Large_Weights
 from torchvision.models.detection.faster_rcnn import FasterRCNN_ResNet50_FPN_Weights
 from torchvision.utils import flow_to_image
 from torchvision.io import read_video
 import torchvision.transforms as T
-from torchvision.models import vgg16
 from tqdm import tqdm
 import os
 import shutil
@@ -26,7 +25,6 @@ parser.add_argument('--embed_dim', type=int, default=512, help='Embedding dimens
 parser.add_argument('--hidden_size', type=int, default=512, help='Hidden size for the hidden state')
 parser.add_argument('--stride', type=int, default=1, help='Stride for video frame sampling')
 parser.add_argument('--num_frames', type=int, default=127, help='Total number of frames used for training for each video')
-parser.add_argument('--resize_img', type=int, default=224, help='Size to resize images for processing')
 parser.add_argument('--patch_size', type=int, default=32, help='Patch size for CLIP image encoder')
 args = parser.parse_args()
 
@@ -35,11 +33,10 @@ embed_dim = args.embed_dim
 hidden_size = args.hidden_size
 stride = args.stride
 num_frames = args.num_frames
-resize_img = args.resize_img
 patch_size = args.patch_size
 
 class VideoDataset(Dataset): 
-    def __init__(self, resize_img, video_path, annotation_path, mask_paths, stride, num_frames): 
+    def __init__(self, video_path, annotation_path, mask_paths, stride, num_frames): 
         self.num_frames = num_frames
 
         video_subfolders = os.listdir(video_path)
@@ -79,31 +76,24 @@ class VideoDataset(Dataset):
 
         self.preprocess = T.Compose(
             [
-                T.ConvertImageDtype(torch.float32),
-                T.Normalize(
+                T.ConvertImageDtype(torch.float32), 
+                T.Resize(size=240, interpolation=T.InterpolationMode.BICUBIC, max_size=None, antialias=True),
+                T.CenterCrop(size=(160, 240)),
+                T.Normalize( 
                     mean=(0.48145466, 0.4578275, 0.40821073), 
                     std=(0.26862954, 0.26130258, 0.27577711))
             ]
         )
-
-        self.resize = T.Compose([
-            T.Resize(size=resize_img, interpolation=T.InterpolationMode.BICUBIC, max_size=None, antialias=True),
-            T.CenterCrop(size=(resize_img, resize_img))]
-        )
-
-        self.norm = T.Normalize(
-            mean=(0.48145466, 0.4578275, 0.40821073), 
-            std=(0.26862954, 0.26130258, 0.27577711)
-        )
-
-        self.inv_norm = T.Compose(
+        
+        self.to_original = T.Compose(
             [
-                T.Normalize(mean = [ 0., 0., 0. ],
-                std = [1/0.26862954, 1/0.26130258, 1/0.27577711]),
+                T.Normalize(
+                    mean = [ 0., 0., 0. ],
+                    std = [1/0.26862954, 1/0.26130258, 1/0.27577711]),
                 T.Normalize(
                     mean = [-0.48145466, -0.4578275, -0.40821073],
-                    std = [ 1., 1., 1. ]
-                )
+                    std = [ 1., 1., 1. ]),
+                T.ConvertImageDtype(torch.uint8) 
             ]
         )        
 
@@ -123,9 +113,7 @@ class VideoDataset(Dataset):
         
         # Attention: If you apply stride, you must apply it to motion trajectories, collisions, etc. as well
         # frames = frames[::self.stride]
-        frames_norm = self.preprocess(frames)
-        frames_resized = self.resize(frames_norm)
-        frames_processed = self.preprocess(frames_resized)
+        frames_processed = self.preprocess(frames)
 
         with open(annotation_path, 'r') as f:
             annotations = json.load(f)
@@ -202,7 +190,7 @@ rnn_cell = nn.LSTMCell(
     input_size = embed_dim, 
     hidden_size = hidden_size).to(device).train()
 
-faster_rcnn = torchvision.models.detection.fasterrcnn_resnet50_fpn(weights=FasterRCNN_ResNet50_FPN_Weights.DEFAULT).to(device).eval()
+faster_rcnn = fasterrcnn_resnet50_fpn(weights=FasterRCNN_ResNet50_FPN_Weights.DEFAULT).to(device).eval()
 
 optimizer_image = torch.optim.Adam(image_reconstruction.parameters(), lr=0.001)
 optimizer_flow_h = torch.optim.Adam(horizontal_flow_reconstruction.parameters(), lr=0.001)
@@ -304,7 +292,7 @@ for frames, frames_processed, masks, object_properties, motion_trajectories, col
         current_img_norm = frames_norm[:, 0]
         current_img_resized = frames_resized[:, 0] # resize(current_img_norm)
         current_img_processed = frames_processed[:, 0] # preprocess(current_img_resized)                             
-        current_img_features = image_feature_extraction.encode_image(current_img_processed) 
+        current_img_features = image_feature_extraction.encode_image(current_img_processed)
         ############ Extracting Current Image Features ###########
         
         ############ Predicting the Next Frames, Optical Flows, and States  ###########
