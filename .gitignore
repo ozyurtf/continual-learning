@@ -19,3 +19,5 @@ test.json
 validation.json
 flowsflows_train
 flows_validation
+precomputed
+checkpoints
