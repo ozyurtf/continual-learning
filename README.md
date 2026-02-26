@@ -4,7 +4,8 @@ The full dataset can be downloaded from here: [http://clevrer.csail.mit.edu](htt
 
 ## Different Training Architectures
 
-1) In this approach, we can use an image encoder (e.g., CLIP, ViT), an LSTM cell, and separate decoder heads for frames, optical flows, object states, and collisions. Instead of decoding frames directly from the hidden state, we can use the predicted optical flow to warp the current frame into an initial estimate of the next frame, and a small residual network to correct the artifacts introduced by the warping process.                                    
+### 1st Approach
+In this approach, we can use an image encoder (e.g., CLIP, ViT), an LSTM cell, and separate decoder heads for frames, optical flows, object states, and collisions. Instead of decoding frames directly from the hidden state, we can use the predicted optical flow to warp the current frame into an initial estimate of the next frame, and a small residual network to correct the artifacts introduced by the warping process.
 
 At each time step, the LSTM takes the CLIP features of the current frame as input and updates its hidden state. From this hidden state, the flow head predicts the optical flow between the current and next frame. This predicted flow is then used to warp the current frame via backward warping with bilinear interpolation. The residual head then takes the warped frame and produces a small correction, and the final predicted frame is the sum of the warped frame and this correction. The state head and collision head also read from the same hidden state and predict the bounding box state and whether a collision occurs at the next time step respectively.
 
@@ -22,7 +23,9 @@ Cons:
 - Artifacts from warping compound over multiple prediction steps during inference because each predicted frame becomes the source for the next warp.
 - CLIP was trained on general internet images rather than synthetic physics simulations, so its frame representations may not be optimally suited for capturing the motion dynamics of CLEVRER objects.
 
-1) We can build and train a VAE model to represent the video frames in a lower dimension. Once the VAE is trained, we can encode all the videos into lower-dimensional latents. In the next step, we can train another model (e.g., a transformer-based or diffusion model) to predict the latent variable at t + 1 based on the latent variable at t. And during inference, we can give the latents to this model, predict the next latents, use the VAE decoder to decode these latents, and predict/reconstruct the next frame. During the training of the VAE model, we can use reconstruction loss + KL divergence as our loss function. For the second model, L1 or L2 loss can be a good option.
+### 2nd Approach 
+
+We can build and train a VAE model to represent the video frames in a lower dimension. Once the VAE is trained, we can encode all the videos into lower-dimensional latents. In the next step, we can train another model (e.g., a transformer-based or diffusion model) to predict the latent variable at t + 1 based on the latent variable at t. And during inference, we can give the latents to this model, predict the next latents, use the VAE decoder to decode these latents, and predict/reconstruct the next frame. During the training of the VAE model, we can use reconstruction loss + KL divergence as our loss function. For the second model, L1 or L2 loss can be a good option.
 
 Pros:
 - Very simple method. 
@@ -32,7 +35,8 @@ Cons:
 - The temporal model has to figure out motion, occlusion, and the changes of the appearances of the objects during the video.
 - It has to learn from scratch that pixels should stay coherent in the generated videos.
 
-2) Similar to the first approach, we can train a VAE model to convert the video frames into lower-dimension latents. And for the temporal model, instead of predicting the next latent, we can use two heads and predict the next latent and optical flow field between the current step and the next step. 
+### 3rd Approach
+Similar to the first approach, we can train a VAE model to convert the video frames into lower-dimension latents. And for the temporal model, instead of predicting the next latent, we can use two heads and predict the next latent and optical flow field between the current step and the next step. 
 
 We can give the current latent as input to the head of the temporal model to predict the latent in the next step. And we can give the current latent and next latent as input to the second head to predict the optical flow between them. 
 
@@ -47,7 +51,8 @@ Cons:
 - Need to compute optical flow.
 - The quality of the flow supervision depends on whichever model we use to compute the flow.
 
-3) As before, we can train a VAE model to represent the video frames in a lower dimension. And in the temporal model, we can use 3 heads: 
+### 4th Approach
+As before, we can train a VAE model to represent the video frames in a lower dimension. And in the temporal model, we can use 3 heads: 
 
 - Flow predictor: For taking the latent at time step t and predicting the optical flow between t and t + 1. 
 - Occlusion mask predictor: For taking the latent at step t and predicting which regions in the frame are trustworthy versus occluded. This runs in parallel with the flow predictor. 
@@ -73,7 +78,8 @@ Cons:
 - If optical flow is not good, the residual predictor has to close the gap, which may not be possible.
 - May not perform well if there are sudden, chaotic or highly unpredictable motions.
 
-4) In this approach, we train two VAEs: one for encoding and decoding video frames, and another for encoding and decoding optical flows. And we concatenate the frame latents and optical flow latents in time step t, and use this as input to the temporal model to predict the next frame latents and optical flow latents. During the training process of the temporal model, we supervise each prediction against the corresponding ground truth latent. 
+### 5th Approach
+In this approach, we train two VAEs: one for encoding and decoding video frames, and another for encoding and decoding optical flows. And we concatenate the frame latents and optical flow latents in time step t, and use this as input to the temporal model to predict the next frame latents and optical flow latents. During the training process of the temporal model, we supervise each prediction against the corresponding ground truth latent. 
 
 One note is that the system can try to represent both appearance features and optical flow features in the same latent space because the goal is to reconstruct the frames and optical flows accurately, and there is no way to prevent the optical flow information and appearance information to be mixed in the latent space without special constraints.
 
@@ -121,4 +127,3 @@ Assuming we choose approach 3, we can utilize the flow predictor head during tes
 - PSNR
 - SSIM
 - LPIPS
-
