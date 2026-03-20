@@ -126,4 +126,9 @@ Assuming we choose approach 3, we can utilize the flow predictor head during tes
 
 - PSNR
 - SSIM
-- LPIPS
+- tLPIPS
+- IoU of objects over time
+- Collision correctness
+- Subject consistency
+- Background consistency
+- Motion smoothness
