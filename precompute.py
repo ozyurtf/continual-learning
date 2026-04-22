@@ -1,21 +1,3 @@
-"""
-precompute.py — Offline precomputation of per-video arrays.
-
-For each video in the selected split + folder subset, computes and saves:
-  video_XXXXX_flow.npy         (T-1, 2, H_z, W_z)  RAFT flow (latent space)
-  video_XXXXX_flow_bwd.npy     (T-1, 2, H_z, W_z)  backward RAFT flow
-  video_XXXXX_occ.npy          (T-1, 1, H_z, W_z)  FB-consistency occlusion mask
-  video_XXXXX_physics_flow.npy (T-1, 2, H_z, W_z)  physics-informed flow (train/val only)
-
-Usage
------
-  python precompute.py --split train --video_folders video_00000-01000 \
-                       --img_h 128 --img_w 128 --flow_dir precomputed
-
-  # Full dataset on server
-  python precompute.py --split train --img_h 320 --img_w 480 --flow_dir precomputed
-"""
-
 import os
 import sys
 import glob
@@ -32,11 +14,6 @@ from tqdm import tqdm
 
 from config import get_device
 from utils import backward_warp, downscale_flow, decode_rle_mask
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Helpers
-# ─────────────────────────────────────────────────────────────────────────────
 
 _SPLIT_DIRS = {
     "train": "video_train",
@@ -92,11 +69,6 @@ def load_frames(mp4_path: str, img_h: int, img_w: int) -> torch.Tensor:
         frames = TF.resize(frames, [img_h, img_w], antialias=True)
     return frames
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# RAFT optical flow
-# ─────────────────────────────────────────────────────────────────────────────
-
 def build_raft(device: torch.device) -> torch.nn.Module:
     model = raft_small(weights=Raft_Small_Weights.DEFAULT)
     model.eval().to(device)
@@ -122,27 +94,15 @@ def compute_flows_raft(raft_model, frames: torch.Tensor, device: torch.device,
     # RAFT expects (B, 3, H, W) in [0, 255] with dtype float32
     frames_255 = (frames * 255.0).to(device)
 
-    fwd_list, bwd_list = [], []
-    for t in range(T - 1):
-        f1 = frames_255[t: t + 1]
-        f2 = frames_255[t + 1: t + 2]
+    # Batch all consecutive frame pairs into a single RAFT call
+    f1 = frames_255[:-1]   # (T-1, 3, H, W)  frames t=0..T-2
+    f2 = frames_255[1:]    # (T-1, 3, H, W)  frames t=1..T-1
 
-        # forward t → t+1
-        flow_f = raft_model(f1, f2)[-1]   # (1, 2, H, W)
-        # backward t+1 → t
-        flow_b = raft_model(f2, f1)[-1]   # (1, 2, H, W)
+    flow_fwd = downscale_flow(raft_model(f1, f2)[-1], scale).cpu().numpy()  # (T-1, 2, H_z, W_z)
+    flow_bwd = downscale_flow(raft_model(f2, f1)[-1], scale).cpu().numpy()  # (T-1, 2, H_z, W_z)
 
-        fwd_list.append(downscale_flow(flow_f, scale))  # (1, 2, H_z, W_z)
-        bwd_list.append(downscale_flow(flow_b, scale))
-
-    flow_fwd = torch.cat(fwd_list, dim=0).cpu().numpy()  # (T-1, 2, H_z, W_z)
-    flow_bwd = torch.cat(bwd_list, dim=0).cpu().numpy()
     return flow_fwd, flow_bwd
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Forward-Backward consistency occlusion mask
-# ─────────────────────────────────────────────────────────────────────────────
 
 def compute_fb_occlusion(flow_fwd: np.ndarray, flow_bwd: np.ndarray,
                          alpha: float = 0.5) -> np.ndarray:
@@ -177,10 +137,6 @@ def compute_fb_occlusion(flow_fwd: np.ndarray, flow_bwd: np.ndarray,
 
     return torch.cat(occ_masks, dim=0).numpy()  # (T-1, 1, H_z, W_z)
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Physics-informed flow map
-# ─────────────────────────────────────────────────────────────────────────────
 
 def _load_annotation(annot_path: str):
     with open(annot_path) as f:
@@ -238,7 +194,6 @@ def compute_physics_flow(data_root: str, split: str, video_idx: int,
 
     H_z, W_z = img_h // scale, img_w // scale
 
-    # ── Collect per-frame velocities ──────────────────────────────────────────
     frame_velocities = {}  # frame_id → {object_id: (vx, vy)}
     for fd in ann.get("motion_trajectory", []):
         fid = fd["frame_id"]
@@ -247,7 +202,6 @@ def compute_physics_flow(data_root: str, split: str, video_idx: int,
             vel = obj.get("velocity", [0.0, 0.0, 0.0])
             frame_velocities[fid][obj["object_id"]] = (vel[0], vel[1])
 
-    # ── Collect per-frame segmentation masks from derender proposals ──────────
     # der["frames"] is a list of {frame_index, objects: [{mask: {size,counts}, ...}]}
     frame_masks = {}  # frame_id → {object_index_in_frame: np.ndarray (H, W) bool}
     for fdata in der.get("frames", []):
@@ -260,7 +214,6 @@ def compute_physics_flow(data_root: str, split: str, video_idx: int,
                 m = np.zeros((img_h, img_w), dtype=bool)
             frame_masks[fid].append(m)
 
-    # ── Estimate world-to-pixel projection P (2×2 learnable) ─────────────────
     # We do a simple least-squares fit: for each (object, frame) pair where the
     # object is moving, use the mean RAFT flow in its masked region as the target.
     # P maps (vx, vy) → (flow_x_pixel, flow_y_pixel)
@@ -279,7 +232,6 @@ def compute_physics_flow(data_root: str, split: str, video_idx: int,
     px = img_w / 8.0  # pixels per world unit along x
     py = img_h / 8.0  # pixels per world unit along y
 
-    # ── Build physics flow maps ───────────────────────────────────────────────
     # We produce (T-1) maps: map at index t captures motion from frame t to t+1.
     # We use the velocity at frame t (current state).
     physics_flow_full = np.zeros((T - 1, 2, img_h, img_w), dtype=np.float32)
@@ -317,16 +269,10 @@ def compute_physics_flow(data_root: str, split: str, video_idx: int,
             physics_flow_full[t, 0][mask_resized] = flow_x
             physics_flow_full[t, 1][mask_resized] = flow_y
 
-    # ── Downscale to latent resolution ───────────────────────────────────────
     physics_flow_t = torch.from_numpy(physics_flow_full)
     physics_flow_z = downscale_flow(physics_flow_t, scale).numpy()  # (T-1, 2, H_z, W_z)
 
     return physics_flow_z.astype(np.float32)
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Main
-# ─────────────────────────────────────────────────────────────────────────────
 
 def parse_args():
     p = argparse.ArgumentParser(description="Precompute optical flows for CLEVRER")
@@ -344,6 +290,10 @@ def parse_args():
     p.add_argument("--device", default="auto")
     p.add_argument("--overwrite", action="store_true",
                    help="Recompute even if output files already exist")
+    p.add_argument("--num_workers", type=int, default=1,
+                   help="Total number of parallel processes (default: 1 = no splitting)")
+    p.add_argument("--worker_id", type=int, default=0,
+                   help="Index of this process (0-indexed, must be < num_workers)")
     return p.parse_args()
 
 
@@ -362,6 +312,10 @@ def main():
 
     mp4_paths = find_mp4s(args.data_root, args.split, video_folders, args.max_videos)
     print(f"Found {len(mp4_paths)} videos for split='{args.split}'")
+
+    # Split workload across parallel workers
+    mp4_paths = mp4_paths[args.worker_id::args.num_workers]
+    print(f"Worker {args.worker_id}/{args.num_workers}: processing {len(mp4_paths)} videos")
 
     print("Loading RAFT-Small model …")
     raft = build_raft(device)
@@ -384,20 +338,16 @@ def main():
         if all_exist and not args.overwrite:
             continue
 
-        # ── Load frames ────────────────────────────────────────────────────
         frames = load_frames(mp4_path, args.img_h, args.img_w)  # (T, 3, H, W)
 
-        # ── RAFT flows ────────────────────────────────────────────────────
         flow_fwd, flow_bwd = compute_flows_raft(raft, frames, device, scale)
 
-        # ── FB-consistency occlusion mask ─────────────────────────────────
         occ = compute_fb_occlusion(flow_fwd, flow_bwd, args.fb_alpha)
 
         np.save(fwd_path, flow_fwd.astype(np.float32))
         np.save(bwd_path, flow_bwd.astype(np.float32))
         np.save(occ_path, occ.astype(np.float32))
 
-        # ── Physics flow (train/val only) ──────────────────────────────────
         if not os.path.exists(phys_path) or args.overwrite:
             phys = compute_physics_flow(
                 args.data_root, args.split, video_idx,

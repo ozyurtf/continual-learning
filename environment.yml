@@ -1,18 +1,18 @@
 name: clevrer-vp
 channels:
-  - pytorch
-  - conda-forge
-  - defaults
+- pytorch
+- conda-forge
+- defaults
 dependencies:
-  - python=3.11
-  - pytorch>=2.2
-  - torchvision>=0.17
-  - numpy
-  - opencv
-  - matplotlib
-  - tqdm
-  - pillow
-  - pip:
-      - lpips
-      - scikit-image
-      - einops
+- python=3.11
+- pytorch>=2.2
+- torchvision>=0.17
+- numpy
+- opencv
+- matplotlib
+- tqdm
+- pillow
+- scikit-image
+- pip:
+  - lpips
+  - einops

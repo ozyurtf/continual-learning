@@ -3,12 +3,9 @@ import copy
 import struct
 import numpy as np
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Warping
-# ─────────────────────────────────────────────────────────────────────────────
 
 def backward_warp(feat: torch.Tensor, flow: torch.Tensor) -> torch.Tensor:
     """
@@ -59,11 +56,6 @@ def downscale_flow(flow: torch.Tensor, scale: int) -> torch.Tensor:
     downsampled = F.avg_pool2d(flow, kernel_size=scale, stride=scale)
     return downsampled / scale
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Metrics
-# ─────────────────────────────────────────────────────────────────────────────
-
 def compute_psnr(pred: torch.Tensor, target: torch.Tensor) -> float:
     """
     PSNR in dB.  Inputs assumed in [0, 1], shape (B, C, H, W) or (C, H, W).
@@ -111,9 +103,55 @@ def compute_lpips(pred: torch.Tensor, target: torch.Tensor) -> float:
     return score.mean().item()
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Loss helpers
-# ─────────────────────────────────────────────────────────────────────────────
+_dino_model = None
+
+
+def perceptual_loss(pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+    """
+    Perceptual loss using DINOv2 (ViT-S/14) intermediate patch features.
+
+    Extracts features from the last 2 transformer blocks and computes L1
+    between pred and target feature maps.
+
+    Inputs: (B, 3, H, W) float32 in [0, 1].
+    Returns: scalar tensor.
+
+    Note: requires internet access on first run to download DINOv2 weights
+    via torch.hub (~85 MB, cached after first download).
+    """
+    global _dino_model
+    if _dino_model is None:
+        _dino_model = torch.hub.load(
+            "facebookresearch/dinov2", "dinov2_vits14", pretrained=True
+        )
+        for p in _dino_model.parameters():
+            p.requires_grad_(False)
+        _dino_model.eval()
+
+    _dino_model = _dino_model.to(pred.device)
+
+    # Normalize to ImageNet stats (same as VGG, standard for most pretrained models)
+    mean = torch.tensor([0.485, 0.456, 0.406], device=pred.device).view(1, 3, 1, 1)
+    std  = torch.tensor([0.229, 0.224, 0.225], device=pred.device).view(1, 3, 1, 1)
+
+    # DINOv2 patch size is 14 — resize spatial dims to nearest multiple of 14
+    H, W = pred.shape[-2], pred.shape[-1]
+    H14 = max((H // 14) * 14, 14)
+    W14 = max((W // 14) * 14, 14)
+    pred_r   = F.interpolate(pred,   size=(H14, W14), mode="bilinear", align_corners=False)
+    target_r = F.interpolate(target, size=(H14, W14), mode="bilinear", align_corners=False)
+
+    pred_n   = (pred_r   - mean) / std
+    target_n = (target_r - mean) / std
+
+    # Extract last 2 transformer block outputs: each (B, N_patches, embed_dim)
+    feat_pred   = _dino_model.get_intermediate_layers(pred_n,   n=2)
+    feat_target = _dino_model.get_intermediate_layers(target_n, n=2)
+
+    loss = sum(F.l1_loss(fp, ft.detach())
+               for fp, ft in zip(feat_pred, feat_target))
+    return loss / len(feat_pred)
+
 
 def focal_loss(pred: torch.Tensor, target: torch.Tensor,
                gamma: float = 2.0, alpha: float = 0.25) -> torch.Tensor:
@@ -132,10 +170,6 @@ def focal_loss(pred: torch.Tensor, target: torch.Tensor,
     loss = alpha_t * (1 - p_t) ** gamma * bce
     return loss.mean()
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Checkpoint helpers
-# ─────────────────────────────────────────────────────────────────────────────
 
 def save_checkpoint(state: dict, path: str) -> None:
     os.makedirs(os.path.dirname(path) if os.path.dirname(path) else ".", exist_ok=True)
@@ -160,10 +194,6 @@ def load_checkpoint(path: str, model: torch.nn.Module,
         optimizer.load_state_dict(ckpt["optimizer"])
     return ckpt.get("epoch", 0)
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# RLE mask decoder  (CLEVRER derender_proposals format)
-# ─────────────────────────────────────────────────────────────────────────────
 
 def decode_rle_mask(rle: dict) -> np.ndarray:
     """

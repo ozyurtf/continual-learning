@@ -21,3 +21,7 @@ flowsflows_train
 flows_validation
 precomputed
 checkpoints
+eval_vae*
+outputs
+*.png
+__pycache__

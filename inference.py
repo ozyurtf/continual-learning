@@ -1,27 +1,3 @@
-"""
-inference.py — Autoregressive video prediction with optional Test-Time Training (TTT).
-
-For each video:
-  1. Feed first `num_input_frames` real frames through the ConvLSTM to warm up hidden state.
-  2. Predict the next `num_pred_frames` frames autoregressively:
-       flow → warp latent → residual → decode
-  3. (Optional TTT) Before step 2, fine-tune FlowHead + OcclusionHead + ResidualHead
-     jointly on the input frames using a self-supervised warp-consistency loss.
-     Reset weights after each video.
-  4. Compute PSNR, SSIM, LPIPS on predicted vs ground-truth frames.
-  5. Save predicted frames as MP4.
-
-Usage
------
-  python inference.py \\
-      --vae_checkpoint     checkpoints/vae_epoch0050.pt \\
-      --temporal_checkpoint checkpoints/temporal_epoch0050.pt \\
-      --video_folders      video_00000-01000 \\
-      --img_h 128 --img_w 128 \\
-      --num_input_frames 5 --num_pred_frames 5 \\
-      --ttt --ttt_steps 10 --output_dir outputs
-"""
-
 import os
 import sys
 import copy
@@ -41,11 +17,6 @@ from utils import (
 )
 from torch.utils.data import DataLoader
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Helpers
-# ─────────────────────────────────────────────────────────────────────────────
-
 def _to_uint8_nhwc(frames: torch.Tensor) -> np.ndarray:
     """(T, 3, H, W) float [0,1] → (T, H, W, 3) uint8 for video saving."""
     return (frames.clamp(0, 1) * 255).byte().permute(0, 2, 3, 1).cpu().numpy()
@@ -63,10 +34,6 @@ def save_mp4(frames_uint8: np.ndarray, path: str, fps: int = 24) -> None:
         writer.write(frame_bgr)
     writer.release()
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# TTT
-# ─────────────────────────────────────────────────────────────────────────────
 
 def run_ttt(temporal: TemporalModel, vae: VAE,
             z_inputs: torch.Tensor, frames_inputs: torch.Tensor,
@@ -123,10 +90,6 @@ def run_ttt(temporal: TemporalModel, vae: VAE,
     return temporal_ttt
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Single-video inference
-# ─────────────────────────────────────────────────────────────────────────────
-
 @torch.no_grad()
 def predict_video(vae: VAE, temporal: TemporalModel,
                   frames: torch.Tensor,    # (T_full, 3, H, W)
@@ -148,13 +111,11 @@ def predict_video(vae: VAE, temporal: TemporalModel,
 
     state = temporal.init_state(B, H_z, W_z, device)
 
-    # ── Warm-up ────────────────────────────────────────────────────────────
     for t in range(num_input):
         z_t = z_all[t: t + 1]  # (1, C_z, H_z, W_z)
         out = temporal.step(z_t, state)
         state = out["new_state"]
 
-    # ── Autoregressive prediction ──────────────────────────────────────────
     pred_frames = []
     z_prev = z_all[num_input - 1: num_input]  # last real latent
 
@@ -172,10 +133,6 @@ def predict_video(vae: VAE, temporal: TemporalModel,
     return torch.stack(pred_frames, dim=0)  # (num_pred, 3, H, W)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Main
-# ─────────────────────────────────────────────────────────────────────────────
-
 def main():
     args = get_args()
     device = args.device
@@ -184,7 +141,6 @@ def main():
         print("ERROR: --vae_checkpoint and --temporal_checkpoint are required.")
         sys.exit(1)
 
-    # ── Load models ───────────────────────────────────────────────────────────
     vae = VAE(c_z=args.c_z).to(device)
     load_checkpoint(args.vae_checkpoint, vae, device=device)
     vae.eval()
@@ -196,11 +152,10 @@ def main():
     load_checkpoint(args.temporal_checkpoint, temporal, device=device)
     temporal.eval()
 
-    # ── Dataset ───────────────────────────────────────────────────────────────
     T_needed = args.num_input_frames + args.num_pred_frames
     dataset = VideoDataset(
         data_root=args.data_root,
-        split="val",
+        split=args.split,
         seq_len=T_needed,
         img_h=args.img_h,
         img_w=args.img_w,
@@ -243,7 +198,6 @@ def main():
         num_input = args.num_input_frames
         num_pred  = args.num_pred_frames
 
-        # ── Optional TTT ──────────────────────────────────────────────────────
         if args.ttt:
             temporal_used = run_ttt(
                 temporal, vae,
@@ -256,7 +210,6 @@ def main():
         else:
             temporal_used = temporal
 
-        # ── Predict ───────────────────────────────────────────────────────────
         temporal_used.eval()
         with torch.no_grad():
             pred_frames = predict_video(
@@ -270,8 +223,7 @@ def main():
 
         # Ground-truth frames for comparison
         gt_frames = frames_flat[num_input: num_input + num_pred]  # (num_pred, 3, H, W)
-
-        # ── Metrics ───────────────────────────────────────────────────────────
+        
         psnr = compute_psnr(pred_frames, gt_frames)
         ssim = compute_ssim(pred_frames.unsqueeze(0), gt_frames.unsqueeze(0))
         lpips_val = compute_lpips(pred_frames, gt_frames)

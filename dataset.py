@@ -1,17 +1,3 @@
-"""
-dataset.py — VideoDataset for CLEVRER video prediction.
-
-Each __getitem__ returns a dict with a subsequence of length seq_len from one video:
-    frames          : (T, 3, H, W)          float32 [0,1]
-    latents         : (T, C_z, H_z, W_z)   float32  (or None)
-    flows           : (T-1, 2, H_z, W_z)   float32  (or None)
-    occ_masks       : (T-1, 1, H_z, W_z)   float32  (or None)
-    physics_flows   : (T-1, 2, H_z, W_z)   float32  (or None)
-    obj_states      : (T, N_max, 6)         float32  (or None)
-    collision_labels: (T-1,)                float32
-    video_idx       : int
-"""
-
 import os
 import glob
 import json
@@ -84,7 +70,6 @@ def _load_annotation(path: str, n_frames: int,
     with open(path) as f:
         ann = json.load(f)
 
-    # ── Object states ──────────────────────────────────────────────────────
     obj_states = np.zeros((n_frames, n_max, state_dim), dtype=np.float32)
     for frame_data in ann.get("motion_trajectory", []):
         t = frame_data["frame_id"]
@@ -99,7 +84,6 @@ def _load_annotation(path: str, n_frames: int,
             obj_states[t, oid, :3] = loc[:3]
             obj_states[t, oid, 3:6] = vel[:3]
 
-    # ── Collision labels ───────────────────────────────────────────────────
     collision_labels = np.zeros(n_frames - 1, dtype=np.float32)
     for col in ann.get("collision", []):
         frame_id = col["frame_id"]
@@ -127,12 +111,13 @@ def _load_frames(mp4_path: str, img_h: int, img_w: int) -> torch.Tensor:
             ok, frame = cap.read()
             if not ok:
                 break
-            # cv2 reads BGR; convert to RGB
+            # cv2 reads BGR; convert to RGB and resize immediately to save memory
             frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            frame_rgb = cv2.resize(frame_rgb, (img_w, img_h), interpolation=cv2.INTER_AREA)
             buf.append(frame_rgb)
         cap.release()
-        arr = np.stack(buf, axis=0).astype(np.float32) / 255.0  # (T, H, W, 3)
-        frames = torch.from_numpy(arr).permute(0, 3, 1, 2)       # (T, 3, H, W)
+        arr = np.stack(buf, axis=0).astype(np.float32) / 255.0  # (T, img_h, img_w, 3)
+        frames = torch.from_numpy(arr).permute(0, 3, 1, 2)       # (T, 3, img_h, img_w)
 
     # Resize if needed
     T, C, H, W = frames.shape
@@ -193,11 +178,9 @@ class VideoDataset(Dataset):
         mp4_path = self.mp4_paths[idx]
         video_idx = _video_idx_from_path(mp4_path)
 
-        # ── Frames ────────────────────────────────────────────────────────────
         frames = _load_frames(mp4_path, self.img_h, self.img_w)
         T_full = frames.shape[0]
 
-        # ── Subsequence window ────────────────────────────────────────────────
         T = min(self.seq_len, T_full)
         if self.random_start and T_full > T:
             start = random.randint(0, T_full - T)
@@ -206,7 +189,6 @@ class VideoDataset(Dataset):
         end = start + T
         frames = frames[start:end]  # (T, 3, H, W)
 
-        # ── Precomputed arrays ─────────────────────────────────────────────────
         prefix = os.path.join(self.flow_dir, f"video_{video_idx:05d}")
 
         def load_npy(suffix, expected_shape_0):
@@ -221,7 +203,6 @@ class VideoDataset(Dataset):
         physics_flows = load_npy("physics_flow", T - 1)  # (T-1, 2, H_z, W_z)
         latents       = load_npy("latents",      T)      # (T, C_z, H_z, W_z)
 
-        # ── Annotations ───────────────────────────────────────────────────────
         annot_path = _find_annotation(self.data_root, self.split, video_idx)
         if annot_path is not None:
             obj_states_full, col_labels_full = _load_annotation(
