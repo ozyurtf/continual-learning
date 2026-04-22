@@ -166,7 +166,7 @@ def main():
         c_z=args.c_z,
         h_z=args.h_z,
         w_z=args.w_z,
-        random_start=False,   # always start from frame 0 for evaluation
+        random_start=False,  
     )
 
     loader = DataLoader(
@@ -232,11 +232,9 @@ def main():
         all_ssim.append(ssim)
         all_lpips.append(lpips_val)
 
-        # ── Save predicted MP4 ────────────────────────────────────────────────
         out_path = os.path.join(args.output_dir, f"video_{video_idx:05d}_pred.mp4")
         save_mp4(_to_uint8_nhwc(pred_frames), out_path)
 
-    # ── Aggregate metrics ──────────────────────────────────────────────────────
     mean_psnr  = float(np.mean(all_psnr))  if all_psnr  else 0.0
     mean_ssim  = float(np.mean(all_ssim))  if all_ssim  else 0.0
     mean_lpips = float(np.mean(all_lpips)) if all_lpips else 0.0

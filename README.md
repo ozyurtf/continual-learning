@@ -2,7 +2,7 @@
 The full dataset can be downloaded from here: [http://clevrer.csail.mit.edu](http://clevrer.csail.mit.edu).  
 
 ## VAE
-Instead of working with high-resolution pixel space, I trained VAE to represent the frames in a lower dimensional latent space and make the training faster, more efficient and cheaper. After training it for ~300 epochs, the reconstructed frames from the test set latents are shown below.
+Instead of working with high-resolution pixel space, I trained VAE to represent the frames in a lower dimensional latent space and make the training faster, more efficient and cheaper. After training it for ~300 epochs, the reconstructed frames from the test set latents are shown below. The ones on the left are ground truth test frames and the ones on the right are reconstructed by the decoder.
 
 <p align="center">
   <img src="figures/vae-reconstruction.png" alt="VAE Reconstruction">
