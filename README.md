@@ -2,7 +2,11 @@
 The full dataset can be downloaded from here: [http://clevrer.csail.mit.edu](http://clevrer.csail.mit.edu).  
 
 ## VAE
+Instead of working with high-resolution pixel space, I trained VAE to represent the frames in a lower dimensional latent space and make the training faster, more efficient and cheaper. After training it for ~300 epochs, the reconstructed frames from the test set latents are shown below.
 
+<p align="center">
+  <img src="eval_vae_out_295/video_15007_comparison.png" alt="VAE Reconstruction">
+</p>
 
 ## Optical Flow Model
 To obtain ground truth optical flows for supervising the flow head, we can use a pre-trained optical flow model such as RAFT[1], FlowFormer[2], SEA-RAFT[3] or WAFT[4] and precompute the flow fields between each consecutive frame offline. 
@@ -29,7 +33,7 @@ Assuming we choose approach 3, we can utilize the flow predictor head during tes
 - **Uncertainty weigthing:** This is a multi-task learning approach. In other words, there are multiple distinct loss functions. Instead of assigning a weight to each loss function manually, we use a different method that automatically adjusts the weights assigned to these loss functions. With this mechanism, these weights can be seen as learnable parameters just like the model weights since the optimizer updates them every step via backpropagation. For small losses, for instance, the system learns to assigns a higher weight while it learns to assign smaller weights for high losses.
 
 ### Test-Time Training
-- Frame reconstruction loss: At each step k, warp frame t using the flow predictor's output and compare the warped result against the actual frame t+1 with L1 loss.
+- **Frame reconstruction loss:** At each step k, warp frame t using the flow predictor's output and compare the warped result against the actual frame t+1 with L1 loss.
 
 ## Evaluation Metrics
 - PSNR
@@ -80,8 +84,8 @@ python inference.py \
     --device cuda
 ```
 ## Notes 
-- Use Raft_Large instead of Raft_Small
-- Use 3D VAE instead of 2D 
+- Use Raft-Large instead of Raft-Small
+- Consider the impact of using 3D VAE instead of 2D VAE
 - Prepare system to predict x number of frames in each step during training (x can be assigned a random numebr)
 - Consider integrating adversarial loss to VAE: 
   - Total Loss = L1 loss (reconstruction) + λ₁ × Perceptual loss (feature similarity) + λ₂ × Adversarial loss (fooling discriminator)
