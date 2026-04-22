@@ -17,7 +17,6 @@ In this system, I am using RAFT.
 Assuming we choose approach 3, we can utilize the flow predictor head during test-time training. After training the 3 heads jointly, we can continue updating the flow predictor for each video during inference and reset it back to its pre-trained version for each new video.
 
 ## Loss Functions
-
 ### VAE 
 - **Reconstruction loss:** Pixel-wise L1 loss between the frames decoded from the latents and the actual frames. 
 - **Perceptual loss:** L1 loss between the feature maps of the predicted frame and the feature maps of the ground truth frame that are extracted from a pretrained DINOv2 model. It's internal features respond to edges, textures, shapes, and structure, not individual pixel values. This loss can help us to force VAE decoder to reconstruct the frames that look structurally similar to the target frames.
