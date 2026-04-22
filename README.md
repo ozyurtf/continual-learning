@@ -5,7 +5,7 @@ The full dataset can be downloaded from here: [http://clevrer.csail.mit.edu](htt
 Instead of working with high-resolution pixel space, I trained VAE to represent the frames in a lower dimensional latent space and make the training faster, more efficient and cheaper. After training it for ~300 epochs, the reconstructed frames from the test set latents are shown below.
 
 <p align="center">
-  <img src="eval_vae_out_295/video_15007_comparison.png" alt="VAE Reconstruction">
+  <img src="figures/vae-reconstruction.png" alt="VAE Reconstruction">
 </p>
 
 ## Optical Flow Model
